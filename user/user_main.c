@@ -109,8 +109,56 @@ void ICACHE_FLASH_ATTR print_directory(const char *path) {
 
 }
 
+void ICACHE_FLASH_ATTR copy_file() {
 
-void ICACHE_FLASH_ATTR user_init(void) {
+    char *name1 = "/html/scripts.js";
+    char *name2 = "/html/scripts.js.copy";
+    char buff[1024];
+    size_t r_len, w_len;
+
+    FIL file1, file2;
+    FILINFO finfo1, finfo2;
+
+    FRESULT ret;
+
+    ret = f_open(&file1, name1, FA_READ);
+    if (ret != FR_OK) {
+        os_printf("Failed to open file: %s\n", name1);
+        return;
+    }
+
+    ret = f_open(&file2, name2, FA_WRITE|FA_CREATE_ALWAYS);
+    if (ret != FR_OK) {
+        os_printf("Failed to create file: %s\n", name2);
+        goto fail1;
+    }
+
+    do {
+        r_len = 0;
+        ret = f_read(&file1, buff, sizeof(buff), &r_len);
+        if (ret != FR_OK) {
+            os_printf("Failed to read from file: %s\n", name1);
+            goto fail;
+        }
+
+        if (r_len > 0) {
+            w_len = 0;
+            ret = f_write(&file2, buff, r_len, &w_len);
+            if (ret != FR_OK || r_len != w_len) {
+                os_printf("Failed to write into file: %s\n", name2);
+                goto fail;
+            }
+        }
+    } while(r_len == sizeof(buff));
+fail:
+    f_close(&file2);
+fail1:
+    f_close(&file1);
+
+    return;
+}
+
+void  user_init(void) {
 
     FATFS FatFs;
 
@@ -120,7 +168,9 @@ void ICACHE_FLASH_ATTR user_init(void) {
 	    os_printf("sd card init ok\n");
 	    f_mount(&FatFs, "", 0);
 
-	    print_directory("/html");
+//	    print_directory("/html");
+
+	    copy_file();
 
 	}
 
