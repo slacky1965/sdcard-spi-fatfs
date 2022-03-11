@@ -283,7 +283,7 @@ int ICACHE_FLASH_ATTR sd_write_sector(uint32_t start_block, uint8_t *buffer, uin
     while (sector_count--) {
         count = 0;
         do {
-            response = sd_send_cmd(CMD24, start_block, 0x00, NULL);
+            response = sd_send_cmd(CMD24, start_block++, 0x00, NULL);
             count++;
             if(count > 200) {
                 sd_release();
