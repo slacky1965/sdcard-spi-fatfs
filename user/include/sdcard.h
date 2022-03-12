@@ -95,6 +95,6 @@ typedef enum {
 sdcard_init_err_t sd_init();
 int sd_read_sector(uint32_t start_block, uint8_t *buffer, uint32_t sector_count);
 int sd_write_sector(uint32_t start_block, uint8_t *buffer, uint32_t sector_count);
-bool ICACHE_FLASH_ATTR get_sdcard_status();
+bool get_sdcard_status();
 
 #endif /* USER_INCLUDE_SDCARD_H_ */
