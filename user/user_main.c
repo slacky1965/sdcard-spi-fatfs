@@ -1,6 +1,7 @@
 #include "stdio.h"
 #include "user_interface.h"
 #include "osapi.h"
+#include "driver/uart.h"
 #include "user_config.h"
 #include "mem.h"
 
@@ -162,15 +163,19 @@ void  user_init(void) {
 
     FATFS FatFs;
 
+    uart_init(BIT_RATE_115200, BIT_RATE_115200);
+    os_delay_us(65535);
+
 	wifi_set_opmode(NULL_MODE);
 
 	if (sd_init() == SD_CARD_INIT_OK) {
 	    os_printf("sd card init ok\n");
 	    f_mount(&FatFs, "", 0);
+	    os_delay_us(65535);
 
-//	    print_directory("/html");
+	    print_directory("/html");
 
-	    copy_file();
+//	    copy_file();
 
 	}
 
