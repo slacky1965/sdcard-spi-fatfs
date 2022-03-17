@@ -8,8 +8,16 @@
 #include "appdef.h"
 #include "sdcard.h"
 
-uint8_t type;
-bool sdcard_init_ok = false;
+static sdcard_t sdcard;
+static char csd[CSD_SIZE] = {0};
+static const char *sd_type[] = {
+        "Unknown SD type",
+        "SD type SDSC V.1",
+        "SD type SDSC V.2",
+        "SD type SDHC V.2",
+        "SD type SDHC V.3"
+};
+
 
 static sdcard_init_err_t ICACHE_FLASH_ATTR sd_gpio_init() {
 
@@ -125,10 +133,81 @@ static void ICACHE_FLASH_ATTR sd_select() {
     GPIO_OUTPUT_SET(CS, 0);
 }
 
+static void ICACHE_FLASH_ATTR sd_csd_read() {
+    uint8_t response_r1;
+    uint32_t response_not_r1, count;
+
+    sd_select();
+
+    response_r1 = sd_send_cmd(CMD9, 0, 0x01, NULL);
+
+    if (response_r1 == R1_READY_STATE) {
+
+        count = 0;
+        do {
+            response_r1 = sd_read_byte();
+            count++;
+            if (count > 1024) {
+                os_printf("sd_csd_read: Read to CSD failed! (%s:%u)\n", __FILE__, __LINE__);
+                sd_release();
+                return;
+            }
+        } while (response_r1 != DATA_START_BLOCK);
+
+        for(count = 0; count < CSD_SIZE; count++) {
+            csd[count] = sd_read_byte();
+        }
+
+        sd_write_byte(0xFF);
+        sd_write_byte(0xFF);
+
+        sd_release();
+
+        sdcard.csd_version = csd[0] >> 6;
+
+        if (sdcard.csd_version == CSD_VER3) {
+            sdcard.type = SD_CARD_TYPE_SD3UC;
+        }
+
+        os_printf("Detected %s\n", sd_type[sdcard.type]);
+
+        if (sdcard.csd_version == CSD_VER1) {
+            /* not tested */
+            uint32_t c_size = ((csd[6] & 0x03) << 10) | (csd[7] << 2) | (csd[8] >> 6);
+            uint32_t read_bl_len = csd[5] & 0x0F;
+            uint32_t c_size_mult = ((csd[9] & 0x03) << 1) | ((csd[10] & 0x80) >> 7);
+//            sdcard.capacity = (c_size + 1) << (c_size_mult + 2 + read_bl_len);
+            sdcard.capacity = (c_size + 1) ;
+            sdcard.capacity *= (1 << (c_size_mult + 2));
+            sdcard.sector_size = 1 << read_bl_len;
+            sdcard.capacity *= sdcard.sector_size;
+        } else if (sdcard.csd_version == CSD_VER2) {
+            sdcard.capacity = ((((csd[7] >> 2) << 16) | (csd[8] << 8) | csd[9])+1)*512;
+            sdcard.capacity *= 1024ULL;
+            sdcard.sector_size = 1 << (csd[5] & 0x0F);
+        } else if (sdcard.csd_version == CSD_VER3) {
+            /* not tested */
+            sdcard.capacity = ((((csd[6] & 0x0F) << 24) | (csd[7] << 16) | (csd[8] << 8) | csd[9])+1)*512;
+            sdcard.capacity *= 1024ULL;
+            sdcard.sector_size = 1 << (csd[5] & 0x0F);
+        } else {
+            os_printf("sd_csd_read: Unknown CSD version. (%s:%u)\n", __FILE__, __LINE__);
+            return;
+        }
+
+        os_printf("SD capacity %llu kBytes\n", (sdcard.capacity/1024));
+        os_printf("SD sector size %d Bytes\n", sdcard.sector_size);
+    }
+
+}
+
 sdcard_init_err_t ICACHE_FLASH_ATTR sd_init() {
     uint8_t response_r1;
     uint32_t count;
     uint32_t response_not_r1;
+
+    os_bzero(&sdcard, sizeof(sdcard_t));
+    sdcard.sector_size = 512;
 
     if (sd_gpio_init() != SD_CARD_INIT_GPIO_OK) {
         os_printf("sd_init: Initialize gpio failed! (%s:%u)\n", __FILE__, __LINE__);
@@ -159,7 +238,7 @@ sdcard_init_err_t ICACHE_FLASH_ATTR sd_init() {
     response_r1 = sd_send_cmd(CMD8, CMD8_3V3_MODE_ARG, CMD8_CRC, &response_not_r1);
     if (response_r1 & R1_ILLEGAL_COMMAND) {
         /* SD Card Ver.1 */
-        type = SD_CARD_TYPE_SD1SC;
+        sdcard.type = SD_CARD_TYPE_SD1SC;
         count = 0;
         do {
             sd_send_cmd(CMD55, 0, 0XFF, NULL);
@@ -198,7 +277,7 @@ sdcard_init_err_t ICACHE_FLASH_ATTR sd_init() {
     } else {
         if (response_not_r1 == CMD8_3V3_MODE_ARG) {
             /* SD Card Ver.2 */
-            type = SD_CARD_TYPE_SD2SC;
+            sdcard.type = SD_CARD_TYPE_SD2SC;
             count = 0;
             do {
                 sd_send_cmd(CMD55, 0, 0xFF, NULL);
@@ -213,7 +292,7 @@ sdcard_init_err_t ICACHE_FLASH_ATTR sd_init() {
 
             response_r1 = sd_send_cmd(CMD58, 0, 0xFF, &response_not_r1);
             if (response_not_r1 & CCS) {
-                type = SD_CARD_TYPE_SD2HC;
+                sdcard.type = SD_CARD_TYPE_SD2HC;
             } else {
                 sd_write_byte(0xFF);
                 sd_send_cmd(CMD16, 512, 0XFF, NULL);
@@ -227,7 +306,9 @@ sdcard_init_err_t ICACHE_FLASH_ATTR sd_init() {
 
     sd_release();
 
-    sdcard_init_ok = true;
+    sdcard.sdcard_init = true;
+
+    sd_csd_read();
 
     return SD_CARD_INIT_OK;
 }
@@ -252,7 +333,7 @@ int ICACHE_FLASH_ATTR sd_read_sector(uint32_t start_block, uint8_t *buffer, uint
         do {
             response = sd_read_byte();
             count++;
-            if(count > 4096) {
+            if(count > 1024) {
                 sd_release();
                 os_printf("sd_read_sector: Timeout waiting for data ready. (%s:%u)\n", __FILE__, __LINE__);
                 return 0;
@@ -325,5 +406,13 @@ int ICACHE_FLASH_ATTR sd_write_sector(uint32_t start_block, uint8_t *buffer, uin
 }
 
 bool ICACHE_FLASH_ATTR get_sdcard_status() {
-	return sdcard_init_ok;
+	return sdcard.sdcard_init;
+}
+
+uint64_t ICACHE_FLASH_ATTR sd_get_capacity() {
+    return sdcard.capacity;
+}
+
+uint32_t ICACHE_FLASH_ATTR sd_get_sector_size() {
+    return sdcard.sector_size;
 }
