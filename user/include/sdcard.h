@@ -72,6 +72,11 @@
 /** Set 30-th bit for check Card Capacity Status - CCS **/
 #define CCS (1 << 30)
 //------------------------------------------------------------------------------
+#define CSD_VER1    0x00
+#define CSD_VER2    0x01
+#define CSD_VER3    0x02
+#define CSD_SIZE    0x10
+//------------------------------------------------------------------------------
 
 
 typedef enum {
@@ -89,12 +94,24 @@ typedef enum {
 typedef enum {
     SD_CARD_TYPE_SD1SC = 1,
     SD_CARD_TYPE_SD2SC,
-    SD_CARD_TYPE_SD2HC
+    SD_CARD_TYPE_SD2HC,
+    SD_CARD_TYPE_SD3UC,
+    SD_CARD_TYPE_MAX
 } sdcard_type_t;
+
+typedef struct {
+    uint8_t         csd_version;
+    sdcard_type_t   type;
+    uint64_t        capacity;
+    uint32_t        sector_size;
+    bool            sdcard_init;
+} sdcard_t;
 
 sdcard_init_err_t sd_init();
 int sd_read_sector(uint32_t start_block, uint8_t *buffer, uint32_t sector_count);
 int sd_write_sector(uint32_t start_block, uint8_t *buffer, uint32_t sector_count);
 bool get_sdcard_status();
+uint64_t sd_get_capacity();
+uint32_t sd_get_sector_size();
 
 #endif /* USER_INCLUDE_SDCARD_H_ */
