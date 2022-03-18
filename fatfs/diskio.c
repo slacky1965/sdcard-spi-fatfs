@@ -114,7 +114,7 @@ DRESULT ICACHE_FLASH_ATTR disk_ioctl (
 //            res = RES_OK;
 //            break;
 //        case GET_SECTOR_COUNT:
-//            *(DWORD*)buff = (uint32_t)(sd_get_capacity()/sd_get_sector_size());
+//            *(DWORD*)buff = (sd_get_capacity()/sd_get_sector_size());
 //            res = RES_OK;
 //            break;
 //        case GET_SECTOR_SIZE:
