@@ -173,9 +173,25 @@ void  user_init(void) {
 	    f_mount(&FatFs, "", 0);
 	    os_delay_us(65535);
 
+	    copy_file();
+
 	    print_directory("/html");
 
-//	    copy_file();
+	    FATFS *fs;
+        DWORD fre_clust, fre_sect, tot_sect;
+
+        /* Get volume information and free clusters of drive 1 */
+        if (f_getfree("", &fre_clust, &fs) != FR_OK) {
+            os_printf("f_getfree return error\n");
+            return;
+        }
+
+        /* Get total sectors and free sectors */
+        tot_sect = (fs->n_fatent - 2) * fs->csize;
+        fre_sect = fre_clust * fs->csize;
+
+        /* Print the free space (assuming 512 bytes/sector) */
+        os_printf("%10lu KiB total drive space.\n%10lu KiB available.\n", tot_sect / 2, fre_sect / 2);
 
 	}
 
