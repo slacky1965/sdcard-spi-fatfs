@@ -168,7 +168,7 @@ void  user_init(void) {
 
 	wifi_set_opmode(NULL_MODE);
 
-	if (sd_init() == SD_CARD_INIT_OK) {
+	if (sd_init() == SD_CARD_OK) {
 	    os_printf("sd card init ok\n");
 	    f_mount(&FatFs, "", 0);
 	    os_delay_us(65535);
