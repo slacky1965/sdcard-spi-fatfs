@@ -1,13 +1,12 @@
-#include "stdio.h"
-#include "user_interface.h"
 #include "osapi.h"
+#include "user_interface.h"
 #include "driver/uart.h"
 #include "user_config.h"
 #include "mem.h"
 
 #include "appdef.h"
 #include "sdcard.h"
-#include "ff.h"
+#include "fs.h"
 
 #if ((SPI_FLASH_SIZE_MAP == 0) || (SPI_FLASH_SIZE_MAP == 1))
 #error "The flash map is not supported"
@@ -74,38 +73,40 @@ void ICACHE_FLASH_ATTR user_pre_init(void)
 }
 
 void ICACHE_FLASH_ATTR print_directory(const char *path) {
-    DIR dir;
-    FILINFO Finfo;
+    DIR *dir;
+    struct dirent *de;
     char buff[512];
-    FIL fp;
-//    size_t len;
+    FILE *fp;
+    size_t len;
 
-    if (f_opendir(&dir, path) == FR_OK) {
+    dir = opendir(path);
+    if (dir) {
         os_sprintf(buff, "Directory: %s\n\n", path);
         os_printf(buff);
 
-        while (f_readdir(&dir, &Finfo) == FR_OK && Finfo.fname[0]) {
-            if (!(Finfo.fattrib & AM_DIR)) {
-                os_printf("main: %s", Finfo.fname);
-                os_sprintf(buff, "%s/%s", path, Finfo.fname);
-                if (f_open(&fp, buff, FA_READ) != FR_OK) {
+        while ((de = readdir(dir))) {
+            if (!(de->finfo.fattrib & AM_DIR)) {
+                os_printf("main: %s", de->d_name);
+                os_sprintf(buff, "%s/%s", path, de->d_name);
+                fp = fopen(buff, "r");
+                if (fp == NULL) {
                     os_printf("\tOpen file FAILED\n");
                 } else {
                     os_printf("\tOpen file OK\n");
-//                    if (strcmp(Finfo.fname, "scripts.js") == 0) {
+//                    if (strcmp(de->d_name, "scripts.js") == 0) {
 //                        for (;;) {
-//                            f_read(&fp, buff, sizeof(buff), &len);
+//                            len = fread(buff, sizeof(uint8_t), sizeof(buff), fp);
 //                            if (len == 0) break;
 //                            for (int i = 0; i < len; i++) {
 //                                os_printf("%c", buff[i]);
 //                            }
 //                        }
 //                    }
-                    f_close(&fp);
+                    fclose(fp);
                 }
             }
         }
-        f_closedir(&dir);
+        closedir(dir);
     }
 
 }
@@ -117,44 +118,37 @@ void ICACHE_FLASH_ATTR copy_file() {
     char buff[1024];
     size_t r_len, w_len;
 
-    FIL file1, file2;
-    FILINFO finfo1, finfo2;
+    FILE *file1, *file2;
 
-    FRESULT ret;
-
-    ret = f_open(&file1, name1, FA_READ);
-    if (ret != FR_OK) {
+    file1 = fopen(name1, "r");
+    if (file1 == NULL) {
         os_printf("Failed to open file: %s\n", name1);
         return;
     }
 
-    ret = f_open(&file2, name2, FA_WRITE|FA_CREATE_ALWAYS);
-    if (ret != FR_OK) {
+    file2 = fopen(name2, "w");
+    if (file2 == NULL) {
         os_printf("Failed to create file: %s\n", name2);
         goto fail1;
     }
 
     do {
-        r_len = 0;
-        ret = f_read(&file1, buff, sizeof(buff), &r_len);
-        if (ret != FR_OK) {
+        r_len = fread(buff, sizeof(uint8_t), sizeof(buff), file1);
+        if (r_len == 0) {
             os_printf("Failed to read from file: %s\n", name1);
             goto fail;
         }
 
-        if (r_len > 0) {
-            w_len = 0;
-            ret = f_write(&file2, buff, r_len, &w_len);
-            if (ret != FR_OK || r_len != w_len) {
-                os_printf("Failed to write into file: %s\n", name2);
-                goto fail;
-            }
+        w_len = fwrite(buff, sizeof(uint8_t), r_len, file2);
+        if (r_len != w_len) {
+            os_printf("Failed to write into file: %s\n", name2);
+            goto fail;
         }
     } while(r_len == sizeof(buff));
 fail:
-    f_close(&file2);
+    fclose(file2);
 fail1:
-    f_close(&file1);
+    fclose(file1);
 
     return;
 }
@@ -191,7 +185,7 @@ void  user_init(void) {
         fre_sect = fre_clust * fs->csize;
 
         /* Print the free space (assuming 512 bytes/sector) */
-        os_printf("%10lu KiB total drive space.\n%10lu KiB available.\n", tot_sect / 2, fre_sect / 2);
+        os_printf("%10u KiB total drive space.\n%10u KiB available.\n", tot_sect / 2, fre_sect / 2);
 
 	}
 

@@ -53,7 +53,7 @@ endif # } PDIR
 APPDIR = .
 LDDIR = ../ld
 
-CCFLAGS += -Os -Wpedantic
+CCFLAGS += -Os -Wall -Wundef -std=c99
 
 TARGET_LDFLAGS =		\
 	-nostdlib		\
@@ -70,7 +70,8 @@ ifeq ($(FLAVOR),release)
 endif
 
 COMPONENTS_eagle.app.v6 = \
-	fatfs/libfatfs.a \
+	fatfs/source/libfatfs.a \
+	fatfs/libfs.a \
 	user/libuser.a
 
 LINKFLAGS_eagle.app.v6 = \
@@ -120,9 +121,10 @@ DEPENDS_eagle.app.v6 = \
 #	-DTXRX_RXBUF_DEBUG
 #	-DWLAN_CONFIG_CCX
 CONFIGURATION_DEFINES =	-DICACHE_FLASH \
-                        -DGLOBAL_DEBUG_ON \
-                        -DFATFS_DEF_UINT32_AS_INT \
-                        -DUSE_FILELIB_STDIO_COMPAT_NAMES
+                        -DGLOBAL_DEBUG_ON
+
+#                        -DFATFS_DEF_UINT32_AS_INT 
+#                        -DUSE_FILELIB_STDIO_COMPAT_NAMES
 
 DEFINES +=				\
 	$(UNIVERSAL_TARGET_DEFINES)	\
@@ -145,7 +147,7 @@ DDEFINES +=				\
 # Required for each makefile to inherit from the parent
 #
 
-INCLUDES := $(INCLUDES) -I $(PDIR)include -I $(PDIR)fatfs/include
+INCLUDES := $(INCLUDES) -I $(PDIR)include -I $(PDIR)fatfs -I $(PDIR)fatfs/source
 
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
